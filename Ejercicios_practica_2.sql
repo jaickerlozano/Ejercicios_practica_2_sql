@@ -89,24 +89,6 @@ on e.dept_no=d.dept_no
 where d.dnombre = 'VENTAS'
 group by e.oficio;
 
-/*
- 21. Obtener por cada especialidad el número de trabajadores.
- 22. Visualizar la especialidad que tenga más médicos.
- 23. ¿Cuál es el nombre del hospital que tiene mayor número de plazas?
- 24. Visualizar las diferentes estanterías de la tabla HERRAMIENTAS ordenados
- descendentemente por estantería.
- 25. Averiguar cuántas unidades tiene cada estantería.
- 26. Visualizar las estanterías que tengan más de 15 unidades 27. ¿Cuál es la
- estantería que tiene más unidades?
- 28. A partir de las tablas EMPLE y DEPART mostrar los datos del
- departamento que no tiene ningún empleado.
- 29. Mostrar el número de empleados de cada departamento. En la salida se
- debe mostrar también los departamentos que no tienen ningún empleado.
- 30. Obtener la suma de salarios de cada departamento, mostrando las
- columnas DEPT_NO, SUMA DE SALARIOS y DNOMBRE. En el resultado
- también se deben mostrar los departamentos que no tienen asignados
- empleados.*/
-
 -- 12. Visualizar el número de departamento que tenga más empleados cuyo oficio sea empleado.
 select d.dept_no as num_dept, e.oficio as oficio, count(e.emp_no) as num_emple
 from emple as e inner join depart as d
@@ -162,6 +144,25 @@ on m.cod_hospital=h.cod_hospital
 group by h.nombre, h.cod_hospital
 order by cod_hospital desc;
 
+-- Si utilizamos los médicos que aparecen en las tablas personas y medicos, tendremos la siguiente consulta
+select uni_per_med.cod_hospital, uni_per_med.hospital, sum(uni_per_med.num_medicos) 
+from (
+	select h.cod_hospital as cod_hospital, h.nombre as hospital, count(m.dni) as num_medicos 
+	from hospitales as h left join medicos as m
+	on m.cod_hospital=h.cod_hospital
+	group by h.nombre, h.cod_hospital
+
+	union all
+
+	select h.cod_hospital as cod_hospital, h.nombre as hospital, count(p.dni) as num_medicos
+	from hospitales as h left join personas as p
+	on p.cod_hospital=h.cod_hospital
+	where p.funcion = 'MEDICO'
+	group by h.nombre, h.cod_hospital
+) as uni_per_med
+group by uni_per_med.cod_hospital, uni_per_med.hospital
+order by uni_per_med.cod_hospital desc;
+
 -- 18. Realizar una consulta en la que se muestre por cada hospital el nombre de
 -- las especialidades que tiene.
 select h.nombre as hospital, m.especialidad as especialidad
@@ -177,11 +178,133 @@ on h.cod_hospital=m.cod_hospital
 group by h.nombre, m.especialidad, h.cod_hospital;
 
 -- 20. Obtener por cada hospital el número de empleados.
--- Para este ejercicio contemplo también los empleados que aparecen en la tabla personas
+-- Para este ejercicio contemplo los empleados que aparecen en la tabla personas y los empleados que aparecen en la tabla medicos
+-- de esta forma le metemos más nivel a las subconsultas con las uniones
+select tab_uni.hospital as hospital, sum(tab_uni.num_empleados) as num_empleados 
+from (
+	select h.nombre as hospital, count(m.dni) as num_empleados 
+	from hospitales as h left join medicos as m
+	on h.cod_hospital=m.cod_hospital
+	group by h.nombre
 
+	union 
 
-select * from medicos;
-select * from hospitales;
-select * from personas;
+	select h.nombre as hospital, count(p.dni) as num_empleados
+	from hospitales as h left join personas as p
+	on h.cod_hospital=p.cod_hospital
+	group by h.nombre
+) as tab_uni
+group by tab_uni.hospital;
+
+-- 21. Obtener por cada especialidad el número de trabajadores.
+select especialidad , count(dni) as num_trabajadores
+from medicos 
+group by especialidad
+
+union 
+
+select funcion, count(dni) as num_trabajadores
+from personas
+group by funcion;
+
+-- 22. Visualizar la especialidad que tenga más médicos.
+select especialidad, count(dni) as num_medicos
+from medicos
+group by especialidad
+having count(dni) = (select count(dni) as num_medicos from medicos group by especialidad order by count(dni) desc limit 1);
+
+-- 23. ¿Cuál es el nombre del hospital que tiene mayor número de plazas?
+select nombre, num_plazas
+from hospitales
+where num_plazas = (select max(num_plazas) from hospitales);
+
+-- 24. Visualizar las diferentes estanterías de la tabla HERRAMIENTAS ordenados 
+-- descendentemente por estantería.
+select distinct estanteria from herramientas order by estanteria desc;
+
+-- 25. Averiguar cuántas unidades tiene cada estantería.
+select estanteria, sum(unidades) as unidades_totales
+from herramientas
+group by estanteria
+order by estanteria desc;
+
+-- 26. Visualizar las estanterías que tengan más de 15 unidades 
+select estanteria, sum(unidades) as unidades_totales
+from herramientas
+group by estanteria
+having unidades_totales > 15
+order by estanteria desc;
+
+-- 27. ¿Cuál es la estantería que tiene más unidades?
+select estanteria, sum(unidades) as unidades_totales
+from herramientas
+group by estanteria
+having unidades_totales = (
+	select max(uni.unidades_totales) as unidades_maximas 
+    from (
+		select estanteria, sum(unidades) as unidades_totales
+		from herramientas
+		group by estanteria
+		order by estanteria desc
+	) as uni
+)
+order by estanteria desc;
+
+-- Una forma más corta de hacer el ejercicio anterior podría ser
+select estanteria, sum(unidades) as unidades_totales
+from herramientas
+group by estanteria
+having unidades_totales = (
+	select sum(unidades) as unidades_totales 
+    from herramientas 
+    group by estanteria 
+    order by unidades_totales desc limit 1
+);
+
+-- 28. A partir de las tablas EMPLE y DEPART mostrar los datos del
+-- departamento que no tiene ningún empleado.
+-- Con esta query hallamos los departamentos que existen en la tabla empleados
+select distinct dept_no from emple;
+select dnombre, dept_no from depart where dept_no not in (select distinct dept_no from emple);
+
+-- Otra forma de resolver
+select depart.dnombre, depart.dept_no, count(emp_no) as num_emple
+from depart left join emple
+on depart.dept_no=emple.dept_no
+group by depart.dnombre, depart.dept_no
+having num_emple = 0;
+ 
+/* 29. Mostrar el número de empleados de cada departamento. En la salida se
+debe mostrar también los departamentos que no tienen ningún empleado.*/
+select depart.dept_no, depart.dnombre, count(emp_no) as num_emple
+from depart left join emple
+on depart.dept_no=emple.dept_no
+group by depart.dnombre, depart.dept_no;
+
+/* 30. Obtener la suma de salarios de cada departamento, mostrando las
+columnas DEPT_NO, SUMA DE SALARIOS y DNOMBRE. En el resultado
+también se deben mostrar los departamentos que no tienen asignados
+empleados.*/
+select d.dept_no as dept_no, d.dnombre as departamento, sum(e.salario) as suma_de_salarios
+from depart as d left join emple as e
+on d.dept_no=e.dept_no
+group by d.dept_no, d.dnombre;
+
+/*31. Utilizar la función IFNULL en la consulta anterior para que en el caso de
+que un departamento no tenga empleados, aparezca como suma de salarios el
+valor 0.*/
+select d.dept_no as dept_no, d.dnombre as departamento, ifnull(sum(e.salario),0.0) as suma_de_salarios
+from depart as d left join emple as e
+on d.dept_no=e.dept_no
+group by d.dept_no, d.dnombre;
+
+/*32. Obtener el número de médicos que pertenecen a cada hospital, mostrando
+las columnas COD_HOSPITAL, NOMBRE y NÚMERO DE MÉDICOS. En el
+resultado deben aparecer también los datos de los hospitales que no tienen
+médicos.*/
+select h.cod_hospital as cod_hospital, h.nombre as hospital, count(m.dni) as numero_de_medicos
+from hospitales as h left join medicos as m
+on h.cod_hospital=m.cod_hospital
+group by h.cod_hospital, h.nombre;
 
 
